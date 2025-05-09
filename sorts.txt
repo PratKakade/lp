@@ -1,0 +1,118 @@
+#include <iostream>
+#include <vector>
+#include <omp.h>
+#include <chrono>  // for timing
+using namespace std;
+using namespace std::chrono;
+
+
+void bubbleSort(vector<int>& arr) {
+    int n = arr.size();
+    bool swapped = true;
+
+    while (swapped) {
+        swapped = false;
+
+        // Phase 1: Even-indexed pairs
+        #pragma omp parallel
+        {
+            bool local_swapped = false;
+            #pragma omp for
+            for (int i = 0; i < n - 1; i += 2) {
+                if (arr[i] > arr[i + 1]) {
+                    swap(arr[i], arr[i + 1]);
+                    local_swapped = true;
+                }
+            }
+            #pragma omp critical
+            swapped = swapped || local_swapped;
+        }
+
+        // Phase 2: Odd-indexed pairs
+        #pragma omp parallel
+        {
+            bool local_swapped = false;
+            #pragma omp for
+            for (int i = 1; i < n - 1; i += 2) {
+                if (arr[i] > arr[i + 1]) {
+                    swap(arr[i], arr[i + 1]);
+                    local_swapped = true;
+                }
+            }
+            #pragma omp critical
+            swapped = swapped || local_swapped;
+        }
+    }
+}
+
+
+void merge(vector<int>& arr, int l, int m, int r) {
+    vector<int> temp;
+    int i = l, j = m + 1;
+
+    while (i <= m && j <= r) {
+        if (arr[i] <= arr[j]) temp.push_back(arr[i++]);
+        else temp.push_back(arr[j++]);
+    }
+
+    while (i <= m) temp.push_back(arr[i++]);
+    while (j <= r) temp.push_back(arr[j++]);
+
+    for (int k = l; k <= r; ++k) {
+        arr[k] = temp[k - l];
+    }
+}
+
+void mergeSort(vector<int>& arr, int l, int r) {
+    if (l < r) {
+        int m = l + (r - l) / 2;
+
+        #pragma omp parallel sections
+        {
+            #pragma omp section
+            mergeSort(arr, l, m);
+
+            #pragma omp section
+            mergeSort(arr, m + 1, r);
+        }
+
+        merge(arr, l, m, r);
+    }
+}
+
+int main() {
+    int n;
+    cout << "Enter number of elements: ";
+    cin >> n;
+
+    vector<int> original(n);
+    cout << "Enter elements:\n";
+    for (int i = 0; i < n; i++) {
+        cin >> original[i];
+    }
+
+    // Copy for each algorithm to work on same data
+    vector<int> arr_bubble = original;
+    vector<int> arr_merge = original;
+
+    // ----------------- Bubble Sort -----------------
+    auto bubble_start = high_resolution_clock::now();
+    bubbleSort(arr_bubble);
+    auto bubble_end = high_resolution_clock::now();
+    auto bubble_duration = duration<double>(bubble_end - bubble_start);
+    cout << "Sorted array (Bubble Sort): ";
+    for (int val : arr_bubble) cout << val << " ";
+    cout << "\nTime taken (Bubble Sort): " << bubble_duration.count() << " seconds\n";
+
+    // ----------------- Merge Sort -----------------
+    auto merge_start = high_resolution_clock::now();
+    mergeSort(arr_merge, 0, n - 1);
+    auto merge_end = high_resolution_clock::now();
+    auto merge_duration = duration<double>(merge_end - merge_start);
+    cout << "Sorted array (Merge Sort): ";
+    for (int val : arr_merge) cout << val << " ";
+    cout << "\nTime taken (Merge Sort): " << merge_duration.count() << " seconds\n";
+
+    return 0;
+}
+
